@@ -6,9 +6,11 @@ module Generator
     getter :api
 
     getter commands : Hash(String, CommandEntry) = {} of String => CommandEntry
+    getter types : Array(TypeEntry) = [] of TypeEntry
 
     def initialize(@document : XML::Node, @api = "gl")
       log("Booting generator")
+      map_types
       collect_commands
     end
 
@@ -61,6 +63,38 @@ module Generator
       end
 
       commands
+    end
+
+    def map_types
+      log("Start mapping types")
+      @types.clear
+
+      @document.xpath_nodes("registry/types/type").each do |type_node|
+        next if %w(stddef khrplatform inttypes).includes?(type_node["name"]?.to_s) # Skip these types
+        next if %w(gles1 gles2).includes?( type_node["api"]?.to_s ) # No need for older API's
+
+        name_node = type_node.xpath_node("name")
+
+        content = type_node.content.to_s
+
+        if name_node
+          def_name = name_node.content.to_s.strip
+          ctype_name = content.chomp(def_name + ";").sub("typedef ","").strip
+        else
+          # Fallback for types like 'GLhandleARB'
+          def_name = type_node["name"]?.to_s
+          ctype_name = "TODO"
+        end
+
+        type_entry = Generator::TypeEntry.new
+        type_entry.def_name = def_name
+        type_entry.ctype_name = ctype_name
+
+        @types << type_entry
+      end
+
+      log("Done mapping types, mapped #{types.size} types")
+      @types
     end
 
 
